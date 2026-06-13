@@ -72,7 +72,26 @@ Claudeの回答（批判）：${claudeResponse}
 回答は日本語で、実践的・具体的に。`;
 }
 
-// Claude APIを呼び出す関数
+// GPT APIを呼び出す関数
+async function callGPT(prompt, apiKey) {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content || "回答の取得に失敗しました。";
+}
+
+// Claude APIを呼び出す関数（Artifact経由）
 async function callClaude(prompt) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -84,12 +103,18 @@ async function callClaude(prompt) {
     }),
   });
   const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
   return data.content?.[0]?.text || "回答の取得に失敗しました。";
 }
 
-// GPTモック（APIキーがある場合は本物に切り替え可能）
+// GPTモック（APIキーがない場合）
 function mockGPT(q) {
   return `【仮説と可能性の展開】\n\n「${q}」について、考えられる主要な視点をまず広げます。\n\n① 最も直接的なアプローチとして、既存のフレームワークを活用する方法があります。実績があり低リスクですが、革新性に欠ける可能性があります。\n\n② より創造的な観点では、問題の前提そのものを疑うことが有効です。「なぜそれが問題なのか」を再定義することで、まったく別の解決策が見えてくることがあります。\n\n③ データドリブンな観点からは、まず現状の定量的な把握から始めることを推奨します。数字で状況を把握することが次のステップの精度を上げます。\n\n選択肢として：A）即効性を重視するなら①、B）根本解決を目指すなら②、C）確実性を優先するなら③。次に考えるべき問い：「この状況で最も避けたいリスクは何か？」`;
+}
+
+// Claudeモック（API失敗時のフォールバック）
+function mockClaude(q, gptRes) {
+  return `【批判的検討と論理整理】\n\nGPTが提示した方向性を批判的に検討します。\n\n▸ 各選択肢の根本的な問題点：どれも「前提条件」が曖昧です。「何を成功とするか」が定義されていない状態では、どの選択肢も評価できません。\n\n▸ 見落としがちな視点：リソース（時間・お金・人）の制約が考慮されていません。理想論ではなく、現実の制約の中で何が可能かを先に確認する必要があります。\n\n▸ 本質的な問い：「${q}」という問い自体が正しいかを疑ってください。問いを変えることで、まったく別の解決策が見えてくる可能性があります。\n\n【整理】まず「成功の定義」と「制約条件」を明確にしてから選択肢を評価する。これが最初のステップです。`;
 }
 
 // Geminiモック
@@ -377,35 +402,52 @@ export default function App() {
     setOptimizedPrompt(optimized);
 
     try {
-      // Step 1: GPT（モック or 本物）
+      // Step 1: GPT（APIキーがあれば本物、なければモック）
       setActiveAI("gpt");
       await new Promise(r => setTimeout(r, 600));
-      const gptRes = mockGPT(q);
+      let gptRes;
+      if (apiKeys.gpt?.trim()) {
+        try {
+          const gptPrompt = buildGPTPrompt(optimized);
+          gptRes = await callGPT(gptPrompt, apiKeys.gpt.trim());
+        } catch (e) {
+          gptRes = mockGPT(q); // フォールバック
+        }
+      } else {
+        gptRes = mockGPT(q);
+        await new Promise(r => setTimeout(r, 2000));
+      }
       setMessages(prev => ({ ...prev, gpt: gptRes }));
-      await new Promise(r => setTimeout(r, 2800));
       setDoneAIs(prev => [...prev, "gpt"]);
 
-      // Step 2: Claude（本物のAPIを使用）
+      // Step 2: Claude（本物のAPIを使用、失敗したらモック）
       setActiveAI("claude");
       await new Promise(r => setTimeout(r, 400));
-      const claudePrompt = buildClaudePrompt(optimized, gptRes);
-      const claudeRes = await callClaude(claudePrompt);
+      let claudeRes;
+      try {
+        const claudePrompt = buildClaudePrompt(optimized, gptRes);
+        claudeRes = await callClaude(claudePrompt);
+      } catch (e) {
+        claudeRes = mockClaude(q, gptRes);
+      }
       setMessages(prev => ({ ...prev, claude: claudeRes }));
       setDoneAIs(prev => [...prev, "claude"]);
 
-      // Step 3: Gemini（モック or 本物）
+      // Step 3: Gemini（モック）
       setActiveAI("gemini");
       await new Promise(r => setTimeout(r, 400));
       const geminiRes = mockGemini(q, gptRes, claudeRes);
+      await new Promise(r => setTimeout(r, 1500));
       setMessages(prev => ({ ...prev, gemini: geminiRes }));
-      await new Promise(r => setTimeout(r, 2800));
       setDoneAIs(prev => [...prev, "gemini"]);
 
       setActiveAI(null);
       await new Promise(r => setTimeout(r, 600));
 
-      // 統合回答もClaudeで生成
-      const unifiedPrompt = `以下の3つのAIの議論を統合して、最終的なベストDoを日本語で200字以内で簡潔にまとめてください。
+      // 統合回答をClaudeで生成（失敗したらシンプルなまとめ）
+      let unifiedRes;
+      try {
+        const unifiedPrompt = `以下の3つのAIの議論を統合して、最終的なベストDoを日本語で200字以内で簡潔にまとめてください。
 
 元の質問：${q}
 GPTの回答：${gptRes.slice(0, 300)}
@@ -413,13 +455,16 @@ Claudeの回答：${claudeRes.slice(0, 300)}
 Geminiの回答：${geminiRes.slice(0, 300)}
 
 BRIDGEの最終統合回答として、ユーザーが今すぐ取るべきアクションを明確に示してください。`;
-      const unifiedRes = await callClaude(unifiedPrompt);
+        unifiedRes = await callClaude(unifiedPrompt);
+      } catch (e) {
+        unifiedRes = `3つのAIの議論を統合した結論：\n\n「${q}」について、GPT・Claude・Geminiが異なる視点から検討した結果、共通して浮かび上がったのは「問いの精度が解の質を決める」という点です。\n\nまず「この問いで本当に何を解決したいのか」を1文で書き出してください。それだけで、答えの輪郭が見えてきます。`;
+      }
       setMessages(prev => ({ ...prev, unified: unifiedRes }));
       setShowUnified(true);
       setPhase("done");
 
     } catch (err) {
-      setError("APIの呼び出しに失敗しました。APIキーを確認してください。");
+      setError(`エラーが発生しました：${err.message || "不明なエラー"}`);
       setPhase("idle");
     }
   };
