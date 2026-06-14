@@ -534,7 +534,17 @@ export default function App() {
   const [starred, setStarred] = useState(ls(STORAGE_KEYS.starred, []));
 
   const [error, setError] = useState("");
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [debateOrder, setDebateOrder] = useState(ls("bridge_debate_order", ["gpt","claude","gemini"]));
   const bottomRef = useRef(null);
+
+  // パネル外クリックで閉じる
+  useEffect(() => {
+    if (!aiPanelOpen) return;
+    const handler = () => setAiPanelOpen(false);
+    setTimeout(() => document.addEventListener("click", handler), 0);
+    return () => document.removeEventListener("click", handler);
+  }, [aiPanelOpen]);
   const inputRef = useRef(null);
   const isJa = lang === "ja";
 
@@ -850,13 +860,109 @@ export default function App() {
                 style={{ width: "100%", background: "transparent", border: "none", padding: "12px 14px", color: COLORS.text, fontSize: 15, fontFamily: "inherit", lineHeight: 1.6 }}
               />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px", borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {activeAIs.map(ai=>(
-                    <span key={ai.id} style={{ fontSize: 11, color: thinkingAI===ai.id?ai.color:COLORS.border, fontFamily: "monospace", transition: "color 0.3s" }}>
-                      <span style={{ color: ai.color }}>●</span> {ai.name}
-                    </span>
-                  ))}
+                {/* AIセレクター（Claudeのモデル表示と同じ感じ） */}
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setAiPanelOpen(v=>!v)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: 8 }}
+                    onMouseEnter={e=>e.currentTarget.style.background=COLORS.sidebarHover}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                  >
+                    {/* 選択済みAIのドット */}
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      {activeAIs.map(ai=>(
+                        <div key={ai.id} style={{ width: 9, height: 9, borderRadius: "50%", background: ai.color, boxShadow: thinkingAI===ai.id?`0 0 6px ${ai.color}`:"none", transition: "box-shadow 0.3s" }} />
+                      ))}
+                      {activeAIs.length === 0 && <div style={{ width: 9, height: 9, borderRadius: "50%", background: COLORS.border }} />}
+                    </div>
+                    <span style={{ fontSize: 11, color: COLORS.muted }}>▲</span>
+                  </button>
+
+                  {/* AIセレクターパネル */}
+                  {aiPanelOpen && (
+                    <div style={{ position: "absolute", bottom: "100%", left: 0, marginBottom: 8, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, overflow: "hidden", minWidth: 240, boxShadow: "0 4px 24px rgba(0,0,0,0.5)", animation: "fadeUp 0.2s ease", zIndex: 50 }}>
+                      {/* AI選択 */}
+                      <div style={{ padding: "10px 12px", borderBottom: `1px solid ${COLORS.border}` }}>
+                        <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: "monospace", marginBottom: 8 }}>{isJa?"使うAIを選ぶ":"Select AIs"}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {AI_CONFIG.map(ai => {
+                            const hasKey = ai.id === "claude" || apiKeys[ai.id]?.trim().length > 0;
+                            const sel = selectedAIs.includes(ai.id);
+                            return (
+                              <div key={ai.id} onClick={() => {
+                                if (!hasKey) return;
+                                const next = sel
+                                  ? (selectedAIs.length > 1 ? selectedAIs.filter(x=>x!==ai.id) : selectedAIs)
+                                  : [...selectedAIs, ai.id];
+                                setSelectedAIs(next);
+                                lsSet(STORAGE_KEYS.selectedAIs, next);
+                              }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: hasKey?"pointer":"not-allowed", background: sel && hasKey ? `${ai.color}15` : "transparent", opacity: hasKey?1:0.4, transition: "all 0.2s" }}
+                                onMouseEnter={e=>{if(hasKey)e.currentTarget.style.background=`${ai.color}20`;}}
+                                onMouseLeave={e=>{e.currentTarget.style.background=sel&&hasKey?`${ai.color}15`:"transparent";}}
+                              >
+                                <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${sel&&hasKey?ai.color:COLORS.border}`, background: sel&&hasKey?ai.color:"transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  {sel && hasKey && <span style={{ color: "#000", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                                </div>
+                                <div style={{ width: 7, height: 7, borderRadius: "50%", background: hasKey?ai.color:COLORS.muted, flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, fontWeight: 600, color: hasKey?(sel?ai.color:COLORS.text):COLORS.muted, fontFamily: "monospace", flex: 1 }}>{ai.name}</span>
+                                {!hasKey && <span style={{ fontSize: 10, color: COLORS.muted }}>{isJa?"キー未設定":"No key"}</span>}
+                                {hasKey && sel && selectedAIs.length === 1 && <span style={{ fontSize: 10, color: COLORS.muted }}>{isJa?"最低1つ":"Min 1"}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 順番設定（2つ以上選択時のみ） */}
+                      {selectedAIs.length >= 2 && (
+                        <div style={{ padding: "10px 12px" }}>
+                          <div style={{ fontSize: 11, color: COLORS.muted, fontFamily: "monospace", marginBottom: 8 }}>{isJa?"議論の順番":"Debate Order"}</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {(() => {
+                              const selAIs = AI_CONFIG.filter(a => selectedAIs.includes(a.id));
+                              if (selAIs.length === 2) {
+                                return [
+                                  [selAIs[0].id, selAIs[1].id],
+                                  [selAIs[1].id, selAIs[0].id],
+                                ].map((pattern, i) => {
+                                  const isSelected = JSON.stringify(debateOrder) === JSON.stringify(pattern);
+                                  return (
+                                    <button key={i} onClick={() => { setDebateOrder(pattern); lsSet("bridge_debate_order", pattern); }} style={{ padding: "6px 10px", background: isSelected?"#1A6BB520":COLORS.bg, border: `1px solid ${isSelected?COLORS.accent:COLORS.border}`, borderRadius: 6, color: isSelected?COLORS.accent:COLORS.muted, fontSize: 12, cursor: "pointer", fontFamily: "monospace", textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
+                                      {pattern.map((id,idx) => (
+                                        <span key={id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                          {idx > 0 && <span style={{ color: COLORS.border }}>→</span>}
+                                          <span style={{ color: AI_CONFIG.find(a=>a.id===id)?.color }}>{AI_CONFIG.find(a=>a.id===id)?.name}</span>
+                                        </span>
+                                      ))}
+                                    </button>
+                                  );
+                                });
+                              }
+                              // 3つの場合
+                              const ids = selAIs.map(a=>a.id);
+                              return [
+                                [ids[0],ids[1],ids[2]],[ids[0],ids[2],ids[1]],
+                                [ids[1],ids[0],ids[2]],[ids[1],ids[2],ids[0]],
+                                [ids[2],ids[0],ids[1]],[ids[2],ids[1],ids[0]],
+                              ].map((pattern, i) => {
+                                const isSelected = JSON.stringify(debateOrder) === JSON.stringify(pattern);
+                                return (
+                                  <button key={i} onClick={() => { setDebateOrder(pattern); lsSet("bridge_debate_order", pattern); }} style={{ padding: "6px 10px", background: isSelected?"#1A6BB520":COLORS.bg, border: `1px solid ${isSelected?COLORS.accent:COLORS.border}`, borderRadius: 6, color: isSelected?COLORS.accent:COLORS.muted, fontSize: 12, cursor: "pointer", fontFamily: "monospace", textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}>
+                                    {pattern.map((id,idx) => (
+                                      <span key={id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        {idx > 0 && <span style={{ color: COLORS.border, fontSize: 10 }}>→</span>}
+                                        <span style={{ color: AI_CONFIG.find(a=>a.id===id)?.color }}>{AI_CONFIG.find(a=>a.id===id)?.name}</span>
+                                      </span>
+                                    ))}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
                 <button onClick={handleSend} disabled={!input.trim()||phase==="debating"} style={{ background: input.trim()&&phase!=="debating"?`linear-gradient(135deg,${activeAIs[0]?.color||COLORS.gpt},${activeAIs[activeAIs.length-1]?.color||COLORS.gemini})`:COLORS.border, border: "none", borderRadius: 8, padding: "6px 16px", color: input.trim()&&phase!=="debating"?"#000":COLORS.muted, fontSize: 13, fontWeight: 600, cursor: input.trim()&&phase!=="debating"?"pointer":"not-allowed", transition: "all 0.2s" }}>
                   {phase==="debating"?(isJa?"考え中...":"Thinking..."):"→"}
                 </button>
