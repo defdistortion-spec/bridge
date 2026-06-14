@@ -546,19 +546,25 @@ function MyPage({ open, onClose, lang, setLang, apiKeys, onOpenApiSettings, hist
   );
 }
 
-// ===== 初回セットアップ =====
+// ===== 初回セットアップ（4ステップ） =====
 function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(1);
   const [lang, setLangState] = useState("ja");
+  const [selectedAIs, setSelectedAIs] = useState(["gpt","claude","gemini"]);
   const [keys, setKeys] = useState({ gpt: "", claude: "", gemini: "" });
   const [showKeys, setShowKeys] = useState({gpt:false,claude:false,gemini:false});
+  const [debateMode, setDebateMode] = useState("deep");
   const t = T[lang];
+
+  const toggleAI = (id) => {
+    setSelectedAIs(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  };
 
   const handleComplete = (skipKeys = false) => {
     saveLang(lang);
     if (!skipKeys) saveKeys(keys);
     saveSetupDone();
-    onComplete(lang, skipKeys ? loadKeys() : keys);
+    onComplete(lang, skipKeys ? loadKeys() : keys, debateMode);
   };
 
   return (
@@ -572,10 +578,10 @@ function SetupWizard({ onComplete }) {
           <div style={{ fontFamily: "monospace", fontSize: 40, fontWeight: 700, color: COLORS.text, letterSpacing: 4 }}>BRIDGE</div>
           {/* ステップインジケーター */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20 }}>
-            {[1,2].map(s => (
+            {[1,2,3,4].map(s => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: step>=s ? COLORS.accent : COLORS.border, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: step>=s ? "#fff" : COLORS.muted }}>{s}</div>
-                {s < 2 && <div style={{ width: 40, height: 2, background: step>s ? COLORS.accent : COLORS.border }} />}
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: step>=s ? COLORS.accent : COLORS.border, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: step>=s ? "#fff" : COLORS.muted, transition: "all 0.3s" }}>{s}</div>
+                {s < 4 && <div style={{ width: 24, height: 2, background: step>s ? COLORS.accent : COLORS.border, transition: "all 0.3s" }} />}
               </div>
             ))}
           </div>
@@ -591,27 +597,78 @@ function SetupWizard({ onComplete }) {
                 <button key={l.id} onClick={() => setLangState(l.id)} style={{ flex: 1, padding: "20px", background: lang===l.id ? "#1A6BB520" : COLORS.surface, border: `2px solid ${lang===l.id ? COLORS.accent : COLORS.border}`, borderRadius: 12, color: lang===l.id ? COLORS.accent : COLORS.muted, fontSize: 16, cursor: "pointer", fontWeight: lang===l.id ? 700 : 400, transition: "all 0.2s" }}>{l.label}</button>
               ))}
             </div>
-            <button onClick={() => setStep(2)} style={{ width: "100%", padding: "14px", background: `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})`, border: "none", borderRadius: 10, color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" }}>{T[lang].next}</button>
+            <button onClick={() => setStep(2)} style={{ width: "100%", padding: "14px", background: `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})`, border: "none", borderRadius: 10, color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" }}>{t.next}</button>
           </div>
         )}
 
-        {/* Step 2: APIキー */}
+        {/* Step 2: AI選択 */}
         {step === 2 && (
           <div style={{ animation: "fadeIn 0.3s" }}>
-            <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, color: COLORS.text, margin: "0 0 8px" }}>{T[lang].setup2}</h2>
-            <p style={{ textAlign: "center", fontSize: 14, color: COLORS.muted, margin: "0 0 24px" }}>{T[lang].setup2sub}</p>
+            <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, color: COLORS.text, margin: "0 0 8px" }}>
+              {lang==="ja" ? "使うAIを選ぶ" : "Select Your AIs"}
+            </h2>
+            <p style={{ textAlign: "center", fontSize: 14, color: COLORS.muted, margin: "0 0 8px" }}>
+              {lang==="ja" ? "1つでもOK。後からいつでも変更できます。" : "Even one is fine. You can change this later."}
+            </p>
+            <p style={{ textAlign: "center", fontSize: 12, color: COLORS.accent, margin: "0 0 24px", fontFamily: "monospace" }}>
+              {lang==="ja" ? `最大${AI_CONFIG.length}つのAIが議論します` : `Up to ${AI_CONFIG.length} AIs will debate`}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+              {AI_CONFIG.map(ai => {
+                const selected = selectedAIs.includes(ai.id);
+                return (
+                  <div key={ai.id} onClick={() => toggleAI(ai.id)} style={{ padding: "16px 20px", background: selected ? ai.bg : COLORS.surface, border: `2px solid ${selected ? ai.color : COLORS.border}`, borderRadius: 12, cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${selected ? ai.color : COLORS.border}`, background: selected ? ai.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
+                      {selected && <span style={{ color: "#000", fontSize: 12, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 15, color: selected ? ai.color : COLORS.muted }}>{ai.name}</span>
+                        <span style={{ fontSize: 12, color: COLORS.muted }}>{ai.role[lang]}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.muted }}>
+                        {ai.id==="gpt" ? (lang==="ja"?"アイデアを広げる":"Expands ideas") : ai.id==="claude" ? (lang==="ja"?"深く掘り下げる":"Digs deeper") : (lang==="ja"?"答えをまとめる":"Synthesizes answers")}
+                      </div>
+                    </div>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: ai.color, opacity: selected ? 1 : 0.3 }} />
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ padding: "10px 14px", background: "#1A6BB510", border: "1px solid #1A6BB530", borderRadius: 8, marginBottom: 16, fontSize: 12, color: "#60A5FA", textAlign: "center" }}>
+              {selectedAIs.length === 0
+                ? (lang==="ja" ? "⚠️ 1つ以上選んでください" : "⚠️ Please select at least one")
+                : (lang==="ja" ? `✓ ${selectedAIs.length}つのAIで議論します` : `✓ ${selectedAIs.length} AI${selectedAIs.length>1?"s":""} will debate`)}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setStep(1)} style={{ padding: "14px 20px", background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 10, color: COLORS.muted, fontSize: 14, cursor: "pointer" }}>{t.back}</button>
+              <button onClick={() => setStep(3)} disabled={selectedAIs.length===0} style={{ flex: 1, padding: "14px", background: selectedAIs.length>0 ? `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})` : COLORS.border, border: "none", borderRadius: 10, color: selectedAIs.length>0?"#000":COLORS.muted, fontSize: 15, fontWeight: 700, cursor: selectedAIs.length>0?"pointer":"not-allowed", fontFamily: "monospace" }}>{t.next}</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: APIキー取得 */}
+        {step === 3 && (
+          <div style={{ animation: "fadeIn 0.3s" }}>
+            <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, color: COLORS.text, margin: "0 0 8px" }}>{t.setup2}</h2>
+            <p style={{ textAlign: "center", fontSize: 14, color: COLORS.muted, margin: "0 0 8px" }}>
+              {lang==="ja" ? "選んだAIのAPIキーを入力してください" : "Enter API keys for your selected AIs"}
+            </p>
+            <p style={{ textAlign: "center", fontSize: 12, color: COLORS.accent, margin: "0 0 20px", fontFamily: "monospace" }}>
+              {lang==="ja" ? "スキップしてデモモードで試すこともできます" : "You can skip and try demo mode first"}
+            </p>
             <div style={{ background: "#10B98110", border: "1px solid #10B98130", borderRadius: 8, padding: "10px 14px", marginBottom: 20, display: "flex", gap: 8 }}>
-              <span>🔒</span><span style={{ fontSize: 12, color: "#10B981", lineHeight: 1.6 }}>{T[lang].secureMsg}</span>
+              <span>🔒</span><span style={{ fontSize: 12, color: "#10B981", lineHeight: 1.6 }}>{t.secureMsg}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
-              {AI_CONFIG.map(ai => (
+              {AI_CONFIG.filter(ai => selectedAIs.includes(ai.id)).map(ai => (
                 <div key={ai.id}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: ai.color }} />
                       <span style={{ fontSize: 13, fontWeight: 600, color: ai.color, fontFamily: "monospace" }}>{ai.name}</span>
                     </div>
-                    <a href={ai.docsUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: COLORS.muted, textDecoration: "none" }}>{T[lang].howToGet}</a>
+                    <a href={ai.docsUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: COLORS.muted, textDecoration: "none" }}>{t.howToGet}</a>
                   </div>
                   <div style={{ position: "relative" }}>
                     <input type={showKeys[ai.id]?"text":"password"} value={keys[ai.id]||""} onChange={e=>setKeys(p=>({...p,[ai.id]:e.target.value}))} placeholder={ai.keyPlaceholder} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${keys[ai.id]?ai.border:COLORS.border}`, borderRadius: 8, padding: "10px 44px 10px 14px", color: COLORS.text, fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
@@ -620,10 +677,43 @@ function SetupWizard({ onComplete }) {
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button onClick={() => handleComplete(false)} disabled={!Object.values(keys).some(k=>k.trim())} style={{ width: "100%", padding: "14px", background: Object.values(keys).some(k=>k.trim()) ? `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})` : COLORS.border, border: "none", borderRadius: 10, color: Object.values(keys).some(k=>k.trim())?"#000":COLORS.muted, fontSize: 15, fontWeight: 700, cursor: Object.values(keys).some(k=>k.trim())?"pointer":"not-allowed", fontFamily: "monospace" }}>{T[lang].startWithKey}</button>
-              <button onClick={() => handleComplete(true)} style={{ width: "100%", padding: "12px", background: "#6B728010", border: `1px solid #6B728030`, borderRadius: 10, color: COLORS.muted, fontSize: 13, cursor: "pointer" }}>{T[lang].tryDemo}</button>
-              <button onClick={() => setStep(1)} style={{ width: "100%", padding: "10px", background: "transparent", border: "none", color: COLORS.muted, fontSize: 13, cursor: "pointer" }}>{T[lang].back}</button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => setStep(2)} style={{ padding: "14px 20px", background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 10, color: COLORS.muted, fontSize: 14, cursor: "pointer" }}>{t.back}</button>
+              <button onClick={() => setStep(4)} disabled={!selectedAIs.some(id=>keys[id]?.trim())} style={{ flex: 1, padding: "14px", background: selectedAIs.some(id=>keys[id]?.trim()) ? `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})` : COLORS.border, border: "none", borderRadius: 10, color: selectedAIs.some(id=>keys[id]?.trim())?"#000":COLORS.muted, fontSize: 15, fontWeight: 700, cursor: selectedAIs.some(id=>keys[id]?.trim())?"pointer":"not-allowed", fontFamily: "monospace" }}>{t.next}</button>
+            </div>
+            <button onClick={() => setStep(4)} style={{ width: "100%", padding: "10px", background: "#6B728010", border: `1px solid #6B728030`, borderRadius: 10, color: COLORS.muted, fontSize: 12, cursor: "pointer" }}>{t.tryDemo}</button>
+          </div>
+        )}
+
+        {/* Step 4: 思考モード選択 */}
+        {step === 4 && (
+          <div style={{ animation: "fadeIn 0.3s" }}>
+            <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, color: COLORS.text, margin: "0 0 8px" }}>
+              {lang==="ja" ? "思考モードを選ぶ" : "Choose Debate Mode"}
+            </h2>
+            <p style={{ textAlign: "center", fontSize: 14, color: COLORS.muted, margin: "0 0 24px" }}>
+              {lang==="ja" ? "後からいつでも変更できます" : "You can change this anytime later"}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+              {[
+                { id: "deep", icon: "🔍", title: lang==="ja"?"ディープモード":"Deep Mode", desc: lang==="ja"?"AIが順番に議論。前の回答を踏まえて深掘りする。深さ重視。":"AIs debate sequentially, each building on the last. Depth-focused." },
+                { id: "blast", icon: "💡", title: lang==="ja"?"ブレストモード":"Brainstorm Mode", desc: lang==="ja"?"AIが同時に考える。幅広いアイデアを一気に展開。スピード重視。":"AIs think simultaneously for wide-ranging ideas. Speed-focused." },
+              ].map(m => (
+                <div key={m.id} onClick={() => setDebateMode(m.id)} style={{ padding: "20px", background: debateMode===m.id ? "#1A6BB515" : COLORS.surface, border: `2px solid ${debateMode===m.id ? COLORS.accent : COLORS.border}`, borderRadius: 12, cursor: "pointer", transition: "all 0.2s", display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{ fontSize: 28, flexShrink: 0 }}>{m.icon}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: debateMode===m.id ? COLORS.accent : COLORS.text, marginBottom: 6 }}>{m.title}</div>
+                    <div style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.6 }}>{m.desc}</div>
+                  </div>
+                  {debateMode===m.id && <div style={{ marginLeft: "auto", color: COLORS.accent, fontSize: 18, flexShrink: 0 }}>✓</div>}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setStep(3)} style={{ padding: "14px 20px", background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 10, color: COLORS.muted, fontSize: 14, cursor: "pointer" }}>{t.back}</button>
+              <button onClick={() => handleComplete(false)} style={{ flex: 1, padding: "14px", background: `linear-gradient(135deg,${COLORS.gpt},${COLORS.gemini})`, border: "none", borderRadius: 10, color: "#000", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "monospace" }}>
+                {lang==="ja" ? "BRIDGEを始める 🌉" : "Start BRIDGE 🌉"}
+              </button>
             </div>
           </div>
         )}
@@ -760,9 +850,10 @@ export default function App() {
 
   const hasKeys = Object.values(apiKeys).some(k=>k.trim().length>0);
 
-  const handleSetupComplete = (selectedLang, selectedKeys) => {
+  const handleSetupComplete = (selectedLang, selectedKeys, selectedMode) => {
     setLang(selectedLang);
     setApiKeys(selectedKeys);
+    if (selectedMode) setMode(selectedMode);
     setSetupDone(true);
   };
 
