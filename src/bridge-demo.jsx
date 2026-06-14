@@ -627,38 +627,28 @@ export default function App() {
   const handleListening = async (userText) => {
     const firstAI = activeAIs[0] || AI_CONFIG.find(a=>a.id==="claude");
     const newContext = [...hearingContext, { role: "user", content: userText }];
+    setHearingContext(newContext);
 
-    // Claude で質問の種類を判定（十分な情報が集まったか）
-    const shouldDebate = hearingTurns >= 1 || await checkShouldDebate(userText, newContext);
+    // 具体的な質問かどうかを判定
+    const isDirectQuestion = userText.length > 20 ||
+      hearingTurns >= 1 ||
+      ["教えて","とは","何","どう","すべき","したい","方法","おすすめ","比較","違い","理由","なぜ","について",
+       "what","how","should","tell","explain","compare","why","recommend","about"].some(k => userText.toLowerCase().includes(k));
 
-    if (shouldDebate) {
-      // 議論フェーズへ移行
-      setThinkingAI(firstAI.id);
-      await new Promise(r => setTimeout(r, 600));
-
-      const bridgeMsg = isJa
-        ? `なるほど、わかりました！${activeAIs.length > 1 ? `では${activeAIs.slice(1).map(a=>a.name).join("と")}にも一緒に考えてもらいますね。` : "では一緒に考えていきましょう。"}`
-        : `Got it! ${activeAIs.length > 1 ? `Let me bring in ${activeAIs.slice(1).map(a=>a.name).join(" and ")} to help think through this.` : "Let me think this through with you."}`;
-
-      setThinkingAI(null);
-      addAIMessage(firstAI.id, bridgeMsg);
-      setHearingContext(newContext);
-      await new Promise(r => setTimeout(r, 1200));
+    if (isDirectQuestion) {
       await runDebate(newContext);
     } else {
-      // もう少し聞く
       setThinkingAI(firstAI.id);
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
       setHearingTurns(h => h + 1);
-      setHearingContext(newContext);
 
       const followUpPrompt = isJa
-        ? `ユーザーが「${userText}」と言いました。\n\n自然な話し言葉で、もう少し詳しく聞いてあげてください。1〜2文で、温かく。`
-        : `The user said: "${userText}"\n\nAsk a natural follow-up question in 1-2 sentences to understand better. Be warm and conversational.`;
+        ? `ユーザーが「${userText}」と言いました。もう少し詳しく教えてほしいと、1文で自然に聞いてください。`
+        : `The user said: "${userText}". Ask one natural follow-up question in 1 sentence.`;
 
       const followUp = await invokeAI(firstAI.id,
         [{ role: "user", content: followUpPrompt }],
-        isJa ? "もう少し詳しく教えていただけますか？" : "Could you tell me a bit more?"
+        isJa ? "もう少し教えていただけますか？" : "Could you tell me a bit more?"
       );
 
       setThinkingAI(null);
@@ -666,95 +656,122 @@ export default function App() {
     }
   };
 
-  const checkShouldDebate = async (text, context) => {
-    // 具体的な質問・長い入力・2回目以降は即議論
-    if (text.length > 30) return true;
-    if (context.filter(m=>m.role==="user").length >= 2) return true;
-    const specificKeywords = isJa
-      ? ["教えて","とは","何","どう","すべき","したい","方法","おすすめ","比較","違い","理由","なぜ"]
-      : ["what","how","should","tell","explain","compare","difference","why","recommend"];
-    if (specificKeywords.some(k => text.toLowerCase().includes(k))) return true;
-    return false;
-  };
-
   const runDebate = async (context) => {
     setPhase("debating");
-    const userQuestion = context.filter(m=>m.role==="user").map(m=>m.content).join("\n");
-    const contextSummary = context.map(m => `${m.role==="user"?"ユーザー":"AI"}：${m.content}`).join("\n");
+    const userQuestion = context.filter(m=>m.role==="user").map(m=>m.content).join(" / ");
 
-    const debateAIs = activeAIs.length > 1 ? activeAIs.slice(1) : activeAIs;
+    const debateAIs = activeAIs.length > 0 ? activeAIs : [AI_CONFIG.find(a=>a.id==="claude")];
     const allResponses = [];
 
     for (let i = 0; i < debateAIs.length; i++) {
       const ai = debateAIs[i];
       const isLast = i === debateAIs.length - 1;
-      const role = isLast ? (isJa?"統合・結論":"Conclude") : i===0 ? (isJa?"深掘り":"Dig Deeper") : (isJa?"別視点":"New Angle");
+      const role = debateAIs.length === 1
+        ? (isJa?"回答":"Answer")
+        : i===0 ? (isJa?"発散・仮説":"Explore") : isLast ? (isJa?"統合・結論":"Conclude") : (isJa?"深掘り":"Deepen");
 
       setThinkingAI(ai.id);
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 700));
 
-      const prevContext = allResponses.length > 0
-        ? (isJa?`\n\nここまでの意見：\n${allResponses.map(r=>`${r.name}：${r.content}`).join("\n\n")}`:`\n\nPrevious responses:\n${allResponses.map(r=>`${r.name}: ${r.content}`).join("\n\n")}`)
+      const prevText = allResponses.length > 0
+        ? (isJa ? `
+
+前の回答：
+${allResponses.map(r=>`${r.name}：${r.content.slice(0,200)}`).join("
+
+")}`
+          : `
+
+Previous responses:
+${allResponses.map(r=>`${r.name}: ${r.content.slice(0,200)}`).join("
+
+")}`)
         : "";
 
-      const prompt = isJa
-        ? `ユーザーとの会話：\n${contextSummary}\n\nあなたは${role}担当です。${prevContext}\n\n話し言葉で、自然に、200字以内で答えてください。${isLast?"全体を統合してベストな提案をしてください。":"前の意見を踏まえて、あなたの視点を加えてください。"}`
-        : `Conversation with user:\n${contextSummary}\n\nYour role: ${role}.${prevContext}\n\nRespond naturally and conversationally in under 150 words. ${isLast?"Synthesize everything into the best recommendation.":"Add your unique perspective to the discussion."}`;
+      const prompt = debateAIs.length === 1
+        ? (isJa
+          ? `質問：「${userQuestion}」
 
-      const fallback = isLast
-        ? (isJa?"みんなの意見を踏まえると、まず一つのことに集中して取り組んでみることが大切だと思います。":"Based on everyone's input, I think focusing on one thing at a time would be most effective.")
-        : (isJa?"なるほど、確かにその点は重要ですね。別の視点から見ると…":"That's a good point. From a different angle...");
+話し言葉で自然に、具体的に答えてください。200字以内で。`
+          : `Question: "${userQuestion}"
+
+Answer naturally and specifically in under 150 words.`)
+        : (isJa
+          ? `質問：「${userQuestion}」
+
+あなたは${role}担当です。${prevText}
+
+話し言葉で答えてください。150字以内で。${isLast?"全体を統合してベストな答えを出してください。":""}`
+          : `Question: "${userQuestion}"
+
+Role: ${role}.${prevText}
+
+Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""}`);
+
+      const fallback = isJa
+        ? `「${userQuestion}」についてですね。まず基本的な情報から整理してみましょう。`
+        : `Regarding "${userQuestion}", let me start with the key points.`;
 
       const response = await invokeAI(ai.id, [{ role: "user", content: prompt }], fallback);
 
       setThinkingAI(null);
       allResponses.push({ name: ai.name, content: response });
       addAIMessage(ai.id, response, role);
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 300));
     }
 
-    // BRIDGE統合回答（Claudeで生成）
-    if (activeAIs.length > 1) {
+    if (debateAIs.length > 1) {
       setThinkingAI("bridge");
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
 
       const unifiedPrompt = isJa
-        ? `ユーザーとの会話と各AIの意見を踏まえて、最終的なベストな提案を100字以内で、温かく話し言葉でまとめてください。\n\n会話：${contextSummary}\n\n各AIの意見：\n${allResponses.map(r=>`${r.name}：${r.content}`).join("\n\n")}`
-        : `Based on the conversation and all AI responses, provide a warm, conversational final recommendation in under 100 words.\n\nConversation: ${contextSummary}\n\nResponses:\n${allResponses.map(r=>`${r.name}: ${r.content}`).join("\n\n")}`;
+        ? `質問：${userQuestion}
+
+各AIの回答：
+${allResponses.map(r=>`${r.name}：${r.content}`).join("
+
+")}
+
+最終的な答えを100字以内で話し言葉でまとめてください。`
+        : `Question: ${userQuestion}
+
+Responses:
+${allResponses.map(r=>`${r.name}: ${r.content}`).join("
+
+")}
+
+Summarize the final answer in under 80 words conversationally.`;
 
       const unified = await invokeAI("claude",
         [{ role: "user", content: unifiedPrompt }],
-        isJa?"みなさんの意見を総合すると、まず小さな一歩から始めることが大切です。":"To summarize everyone's thoughts: start with small, concrete steps."
+        isJa?"みなさんの意見を総合すると、まず一歩踏み出すことが大切です。":"To summarize: the most important thing is to take the first step."
       );
 
       setThinkingAI(null);
-      addAIMessage("bridge", unified, isJa?"統合回答":"Unified Answer");
+      addAIMessage("bridge", unified, isJa?"統合回答":"Unified");
     }
 
     setPhase("done");
 
-    // 次の問いを生成
     setNextQLoading(true);
     try {
-      const nqPrompt = isJa
-        ? `この会話を踏まえて、次に考えると良い問いを3つ提案してください。JSONのみ：{"questions":["問い1","問い2","問い3"]}`
-        : `Based on this conversation, suggest 3 follow-up questions. JSON only: {"questions":["q1","q2","q3"]}`;
-      const nqRes = await callClaude([{ role: "user", content: `${nqPrompt}\n\n${contextSummary}` }]);
+      const nqRes = await callClaude([{ role: "user", content: isJa
+        ? `「${userQuestion}」についての会話を踏まえて、次に考えると良い問いを3つ提案してください。JSONのみ：{"questions":["問い1","問い2","問い3"]}`
+        : `Based on "${userQuestion}", suggest 3 follow-up questions. JSON only: {"questions":["q1","q2","q3"]}`
+      }]);
       const parsed = JSON.parse(nqRes.replace(/```json|```/g,"").trim());
       setNextQuestions(parsed.questions||[]);
     } catch {
       setNextQuestions(isJa
-        ? ["もう少し具体的に教えてもらえますか？","他に気になっていることはありますか？","次のステップとして何をしたいですか？"]
-        : ["Can you tell me more specifically?","Is there anything else on your mind?","What would you like to do next?"]);
+        ? ["もっと詳しく知りたいことはありますか？","関連して気になることはありますか？","次に何を試してみますか？"]
+        : ["Would you like to know more?","Anything related you're curious about?","What would you like to try next?"]);
     }
     setNextQLoading(false);
 
-    // 履歴保存
     const title = context.find(m=>m.role==="user")?.content?.slice(0,30) || "会話";
     const histItem = { id: Date.now(), title, date: new Date().toLocaleDateString() };
-    const h = [histItem, ...ls(STORAGE_KEYS.history,[])].slice(0,50);
-    lsSet(STORAGE_KEYS.history, h);
-    setHistory(h);
+    lsSet(STORAGE_KEYS.history, [histItem, ...ls(STORAGE_KEYS.history,[])].slice(0,50));
+    setHistory(ls(STORAGE_KEYS.history,[]));
   };
 
   const resetChat = () => {
