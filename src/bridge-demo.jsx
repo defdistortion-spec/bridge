@@ -674,18 +674,7 @@ export default function App() {
       await new Promise(r => setTimeout(r, 700));
 
       const prevText = allResponses.length > 0
-        ? (isJa ? `
-
-前の回答：
-${allResponses.map(r=>`${r.name}：${r.content.slice(0,200)}`).join("
-
-")}`
-          : `
-
-Previous responses:
-${allResponses.map(r=>`${r.name}: ${r.content.slice(0,200)}`).join("
-
-")}`)
+        ? (isJa ? `\n\n前の回答：\n${allResponses.map(r=>`${r.name}：${r.content.slice(0,200)}`).join("\n\n")}` : `\n\nPrevious responses:\n${allResponses.map(r=>`${r.name}: ${r.content.slice(0,200)}`).join("\n\n")}`)
         : "";
 
       const prompt = debateAIs.length === 1
@@ -725,22 +714,8 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
       await new Promise(r => setTimeout(r, 600));
 
       const unifiedPrompt = isJa
-        ? `質問：${userQuestion}
-
-各AIの回答：
-${allResponses.map(r=>`${r.name}：${r.content}`).join("
-
-")}
-
-最終的な答えを100字以内で話し言葉でまとめてください。`
-        : `Question: ${userQuestion}
-
-Responses:
-${allResponses.map(r=>`${r.name}: ${r.content}`).join("
-
-")}
-
-Summarize the final answer in under 80 words conversationally.`;
+        ? `質問：${userQuestion}\n\n各AIの回答：\n${allResponses.map(r=>`${r.name}：${r.content}`).join("\n\n")}\n\n最終的な答えを100字以内で話し言葉でまとめてください。`
+        : `Question: ${userQuestion}\n\nResponses:\n${allResponses.map(r=>`${r.name}: ${r.content}`).join("\n\n")}\n\nSummarize the final answer in under 80 words conversationally.`;
 
       const unified = await invokeAI("claude",
         [{ role: "user", content: unifiedPrompt }],
