@@ -55,7 +55,17 @@ async function callGPT(messages, apiKey) {
     body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: 800, messages }),
   });
   const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
+  if (d.error) {
+    // クレジット不足の場合
+    if (d.error.code === "insufficient_quota" || d.error.type === "insufficient_quota") {
+      throw new Error("CREDIT_EMPTY");
+    }
+    // 無効なAPIキー
+    if (d.error.code === "invalid_api_key" || r.status === 401) {
+      throw new Error("INVALID_KEY");
+    }
+    throw new Error(d.error.message);
+  }
   return d.choices?.[0]?.message?.content || "";
 }
 
@@ -714,7 +724,18 @@ export default function App() {
           content = await callAI(aiId, [
             { role: "user", content: `${systemPrompt}\n\n${userContent}` }
           ], apiKeys);
-        } catch {
+        } catch(e) {
+          if (e.message === "CREDIT_EMPTY") {
+            setError(isJa
+              ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のAPIクレジットが不足しています。OpenAIのダッシュボードでチャージしてください。デモ回答で続行します。`
+              : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} API credit is empty. Please add credits at the OpenAI dashboard. Continuing with demo response.`
+            );
+          } else if (e.message === "INVALID_KEY") {
+            setError(isJa
+              ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のAPIキーが無効です。設定を確認してください。`
+              : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} API key is invalid. Please check your settings.`
+            );
+          }
           content = getMockResponse(aiId, role, q, allMessages, lang, 1);
         }
 
