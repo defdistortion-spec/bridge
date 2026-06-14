@@ -392,10 +392,14 @@ function ApiKeyModal({ open, onClose, onSave, initialKeys }) {
             </div>
           ))}
         </div>
-        <div style={{ padding: "0 24px 24px", display: "flex", gap: 12 }}>
-          <button onClick={onClose} style={{ flex: 1, background: "transparent", border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "10px", color: COLORS.muted, fontSize: 13, cursor: "pointer" }}>キャンセル</button>
-          <button onClick={handleSave} disabled={!hasAnyKey} style={{ flex: 2, background: hasAnyKey ? `linear-gradient(135deg, ${COLORS.gpt}, ${COLORS.gemini})` : COLORS.border, border: "none", borderRadius: 8, padding: "10px", color: hasAnyKey ? "#000" : COLORS.muted, fontSize: 13, fontWeight: 700, cursor: hasAnyKey ? "pointer" : "not-allowed", fontFamily: "monospace" }}>
-            {saved ? "✓ 保存しました" : "保存する"}
+        <div style={{ padding: "0 24px 8px" }}>
+          <button onClick={onClose} style={{ width: "100%", padding: "10px", background: "#6B728010", border: `1px solid #6B728030`, borderRadius: 8, color: COLORS.muted, fontSize: 12, cursor: "pointer", fontFamily: "monospace" }}>
+            🎮 まずデモモードで試す（APIキー不要）
+          </button>
+        </div>
+        <div style={{ padding: "8px 24px 24px", display: "flex", gap: 12 }}>
+          <button onClick={handleSave} disabled={!hasAnyKey} style={{ flex: 1, background: hasAnyKey ? `linear-gradient(135deg, ${COLORS.gpt}, ${COLORS.gemini})` : COLORS.border, border: "none", borderRadius: 8, padding: "10px", color: hasAnyKey ? "#000" : COLORS.muted, fontSize: 13, fontWeight: 700, cursor: hasAnyKey ? "pointer" : "not-allowed", fontFamily: "monospace" }}>
+            {saved ? "✓ 保存しました" : "APIキーで始める"}
           </button>
         </div>
       </div>
@@ -518,7 +522,7 @@ export default function App() {
 
   const runDebate = async (q, isRetry = false, isDeepen = false) => {
     if (!q.trim() || phase === "running") return;
-    if (!hasKeys) { setApiModalOpen(true); return; }
+    // デモモードでもAPIキーなしで動作可能（モックで対応）
 
     setCurrentQ(q);
     setPhase("running");
@@ -716,7 +720,9 @@ export default function App() {
           <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 18, color: COLORS.text, letterSpacing: 2 }}>BRIDGE</span>
           {round > 1 && <span style={{ fontSize: 11, color: COLORS.muted, fontFamily: "monospace" }}>第{round}ラウンド</span>}
           {!hasKeys ? (
-            <button onClick={() => setApiModalOpen(true)} style={{ marginLeft: "auto", background: "#D9770615", border: "1px solid #D9770640", borderRadius: 8, padding: "6px 14px", color: COLORS.claude, fontSize: 12, cursor: "pointer", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 6 }}>🔑 APIキーを設定する</button>
+            <button onClick={() => setApiModalOpen(true)} style={{ marginLeft: "auto", background: "#6B728015", border: "1px solid #6B728040", borderRadius: 8, padding: "6px 14px", color: COLORS.muted, fontSize: 12, cursor: "pointer", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 6 }}>
+              🎮 デモモード中 <span style={{ color: "#1A6BB5" }}>APIキーを設定</span>
+            </button>
           ) : (
             <button onClick={() => setApiModalOpen(true)} style={{ marginLeft: "auto", background: "transparent", border: "none", color: COLORS.muted, fontSize: 12, cursor: "pointer" }}>🔑</button>
           )}
