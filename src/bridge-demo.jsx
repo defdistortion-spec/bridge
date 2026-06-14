@@ -630,12 +630,25 @@ export default function App() {
   const imageInputRef = useRef(null);
   const isJa = lang === "ja";
 
-  // 選択されたAIの設定のみ取得
-  const activeAIs = AI_CONFIG.filter(ai => selectedAIs.includes(ai.id));
+  // 選択かつAPIキー設定済みのAIのみ（デモモードはClaudeのみ動く）
+  const activeAIs = AI_CONFIG.filter(ai => {
+    if (!selectedAIs.includes(ai.id)) return false;
+    // Claudeはキー不要（Artifact経由で動く）
+    if (ai.id === "claude") return true;
+    // 他はAPIキーが設定されているもののみ
+    return apiKeys[ai.id]?.trim().length > 0;
+  });
 
-  // 有効な順番パターンを生成（選択AIが1つなら変更不要、2つなら2パターン、3つなら6パターン）
+  // 選択済みAIのみで順番パターンを生成
   const [order, setOrder] = useState(selectedAIs);
-  useEffect(() => { setOrder(selectedAIs); }, [selectedAIs.join(",")]);
+  useEffect(() => {
+    // selectedAIsが変わったら、orderも選択済みAIのみに更新
+    setOrder(prev => {
+      const filtered = prev.filter(id => selectedAIs.includes(id));
+      const missing = selectedAIs.filter(id => !filtered.includes(id));
+      return [...filtered, ...missing];
+    });
+  }, [selectedAIs.join(",")]);
 
   const getOrderPatterns = () => {
     if (activeAIs.length <= 1) return [];
@@ -645,7 +658,6 @@ export default function App() {
         [activeAIs[1].id, activeAIs[0].id],
       ];
     }
-    // 3つの場合の全パターン
     const ids = activeAIs.map(a => a.id);
     return [
       [ids[0], ids[1], ids[2]],
