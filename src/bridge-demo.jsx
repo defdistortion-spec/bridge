@@ -56,17 +56,19 @@ async function callGPT(messages, apiKey) {
   });
   const d = await r.json();
   if (d.error) {
-    // クレジット不足の場合
-    if (d.error.code === "insufficient_quota" || d.error.type === "insufficient_quota") {
+    const code = d.error.code || "";
+    const type = d.error.type || "";
+    const msg = d.error.message || "";
+    if (code === "insufficient_quota" || type === "insufficient_quota" || msg.includes("quota") || msg.includes("credit") || r.status === 429) {
       throw new Error("CREDIT_EMPTY");
     }
-    // 無効なAPIキー
-    if (d.error.code === "invalid_api_key" || r.status === 401) {
+    if (code === "invalid_api_key" || r.status === 401) {
       throw new Error("INVALID_KEY");
     }
-    throw new Error(d.error.message);
+    throw new Error(msg || "GPT API Error");
   }
-  return d.choices?.[0]?.message?.content || "";
+  if (!d.choices?.[0]?.message?.content) throw new Error("GPT_EMPTY");
+  return d.choices[0].message.content;
 }
 
 async function callClaude(messages) {
@@ -698,6 +700,7 @@ export default function App() {
     if (debateOrder.length === 0) { setError(isJa ? "AIが選択されていません" : "No AI selected"); setPhase("idle"); return; }
 
     const allMessages = []; // 全チャット履歴（API呼び出し用）
+    const mockUsed = {}; // モック使用フラグ
 
     try {
       // ===== 第1ラウンド =====
@@ -710,32 +713,37 @@ export default function App() {
         setThinkingAI(aiId);
         await new Promise(r => setTimeout(r, 600));
 
-        // 前の発言者の名前を取得
         const prevSpeaker = allMessages.length > 0 ? allMessages[allMessages.length - 1].name : "";
 
-        // API呼び出し用のメッセージを構築
+        // 実際のAPI回答のみ参照（モック回答は除外）
+        const realMessages = allMessages.filter(m => !mockUsed[m.aiId]);
+
         const systemPrompt = buildSystemPrompt(aiId, role, ai.name, lang, 1, prevSpeaker);
-        const userContent = allMessages.length === 0
-          ? (isJa ? `質問：「${q}」\n\nこの質問について、あなたの役割に従って意見を述べてください。` : `Question: "${q}"\n\nShare your perspective on this question according to your role.`)
-          : (isJa ? `質問：「${q}」\n\nここまでの議論：\n${allMessages.map(m => `${m.name}：${m.content}`).join("\n\n")}\n\nあなたの意見を述べてください。` : `Question: "${q}"\n\nDiscussion so far:\n${allMessages.map(m => `${m.name}: ${m.content}`).join("\n\n")}\n\nShare your perspective.`);
+
+        // 実際の回答があれば議論として渡す、モックしかなければ質問のみ
+        const userContent = realMessages.length === 0
+          ? (isJa ? `質問：「${q}」\n\nこの質問について、あなたの役割に従って具体的に答えてください。` : `Question: "${q}"\n\nAnswer this question specifically according to your role.`)
+          : (isJa ? `質問：「${q}」\n\nここまでの議論：\n${realMessages.map(m => `${m.name}：${m.content}`).join("\n\n")}\n\nあなたの意見を述べてください。` : `Question: "${q}"\n\nDiscussion so far:\n${realMessages.map(m => `${m.name}: ${m.content}`).join("\n\n")}\n\nShare your perspective.`);
 
         let content;
         try {
           content = await callAI(aiId, [
             { role: "user", content: `${systemPrompt}\n\n${userContent}` }
           ], apiKeys);
+          mockUsed[aiId] = false;
         } catch(e) {
           if (e.message === "CREDIT_EMPTY") {
             setError(isJa
-              ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のAPIクレジットが不足しています。OpenAIのダッシュボードでチャージしてください。デモ回答で続行します。`
-              : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} API credit is empty. Please add credits at the OpenAI dashboard. Continuing with demo response.`
+              ? `⚠️ ${ai.name}のAPIクレジットが不足しています。OpenAIのダッシュボードでチャージしてください。デモ回答で続行します。`
+              : `⚠️ ${ai.name} API credit is empty. Please add credits at the OpenAI dashboard. Continuing with demo response.`
             );
           } else if (e.message === "INVALID_KEY") {
             setError(isJa
-              ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のAPIキーが無効です。設定を確認してください。`
-              : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} API key is invalid. Please check your settings.`
+              ? `⚠️ ${ai.name}のAPIキーが無効です。設定を確認してください。`
+              : `⚠️ ${ai.name} API key is invalid. Please check your settings.`
             );
           }
+          mockUsed[aiId] = true;
           content = getMockResponse(aiId, role, q, allMessages, lang, 1);
         }
 
