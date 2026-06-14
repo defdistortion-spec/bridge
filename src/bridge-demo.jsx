@@ -431,7 +431,7 @@ function ApiKeyModal({ open, onClose, onSave, keys, setKeys, selectedAIs, lang }
 }
 
 // ===== マイページ =====
-function MyPage({ open, onClose, lang, setLang, apiKeys, selectedAIs, history, starred, onOpenApiSettings }) {
+function MyPage({ open, onClose, lang, setLang, apiKeys, selectedAIs, setSelectedAIs, history, starred, onOpenApiSettings }) {
   const isJa = lang === "ja";
   if (!open) return null;
   return (
@@ -458,6 +458,32 @@ function MyPage({ open, onClose, lang, setLang, apiKeys, selectedAIs, history, s
               ))}
             </div>
           </div>
+          {/* AI選択変更 */}
+          <div style={{ padding: "14px 22px", borderBottom: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 10 }}>{isJa?"使うAIを変更":"Change AI Selection"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {AI_CONFIG.map(ai => {
+                const sel = selectedAIs.includes(ai.id);
+                return (
+                  <div key={ai.id} onClick={() => {
+                    const next = sel
+                      ? (selectedAIs.length > 1 ? selectedAIs.filter(x=>x!==ai.id) : selectedAIs)
+                      : [...selectedAIs, ai.id];
+                    setSelectedAIs(next);
+                    lsSet(STORAGE_KEYS.selectedAIs, next);
+                  }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: sel ? ai.bg : COLORS.bg, border: `2px solid ${sel ? ai.color : COLORS.border}`, borderRadius: 10, cursor: "pointer", transition: "all 0.2s" }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${sel ? ai.color : COLORS.border}`, background: sel ? ai.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {sel && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: ai.color }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: sel ? ai.color : COLORS.muted, fontFamily: "monospace" }}>{ai.name}</span>
+                    {selectedAIs.length === 1 && sel && <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>{isJa?"最低1つ必要":"Min 1 required"}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ padding: "14px 22px" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 10 }}>{isJa?"APIキー":"API Keys"}</div>
             {AI_CONFIG.filter(ai=>selectedAIs.includes(ai.id)).map(ai=>(
@@ -755,7 +781,7 @@ export default function App() {
       `}</style>
 
       <ApiKeyModal open={apiModalOpen} onClose={()=>setApiModalOpen(false)} onSave={k=>{setApiKeys(k);lsSet(STORAGE_KEYS.apiKeys,k);}} keys={apiKeys} setKeys={setApiKeys} selectedAIs={selectedAIs} lang={lang} />
-      <MyPage open={myPageOpen} onClose={()=>setMyPageOpen(false)} lang={lang} setLang={setLang} apiKeys={apiKeys} selectedAIs={selectedAIs} history={history} starred={starred} onOpenApiSettings={()=>setApiModalOpen(true)} />
+      <MyPage open={myPageOpen} onClose={()=>setMyPageOpen(false)} lang={lang} setLang={setLang} apiKeys={apiKeys} selectedAIs={selectedAIs} setSelectedAIs={setSelectedAIs} history={history} starred={starred} onOpenApiSettings={()=>setApiModalOpen(true)} />
       <Sidebar open={sidebarOpen} onClose={()=>setSidebarOpen(false)} lang={lang} history={history} starred={starred} onToggleStar={toggleStar} onSelectHistory={()=>setSidebarOpen(false)} onOpenMyPage={()=>setMyPageOpen(true)} onOpenApiSettings={()=>setApiModalOpen(true)} />
 
       <div style={{ marginLeft: sidebarOpen?280:0, transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)", flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
