@@ -71,7 +71,7 @@ async function callGPT(messages, apiKey, useSearch = false) {
   return d.choices?.[0]?.message?.content || "";
 }
 
-// Gemini API（AQ.形式対応・Web検索付き）
+// Gemini API（AQ.形式・x-goog-api-keyヘッダー対応）
 async function callGemini(messages, apiKey, useSearch = false) {
   const lastMessage = messages[messages.length - 1]?.content || "";
   const body = {
@@ -81,15 +81,12 @@ async function callGemini(messages, apiKey, useSearch = false) {
   if (useSearch) {
     body.tools = [{ google_search: {} }];
   }
-  // AQ.形式のキーはBearer認証を使う
-  const headers = { "Content-Type": "application/json" };
-  const isAQKey = apiKey.startsWith("AQ.");
-  if (isAQKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  }
-  const endpoint = isAQKey
-    ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`
-    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  // AQ.形式もAIzaSy形式も x-goog-api-key ヘッダーで統一
+  const headers = {
+    "Content-Type": "application/json",
+    "x-goog-api-key": apiKey,
+  };
+  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
   const r = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || "Gemini API Error");
