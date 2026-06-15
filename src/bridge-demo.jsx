@@ -845,7 +845,14 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
           <div style={{ display: "flex", gap: 5 }}>
             {activeAIs.map(ai=><div key={ai.id} style={{ width: 8, height: 8, borderRadius: "50%", background: ai.color, boxShadow: thinkingAI===ai.id?`0 0 8px ${ai.color}`:"none", transition: "box-shadow 0.3s" }} />)}
           </div>
-          <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 18, color: COLORS.text, letterSpacing: 2 }}>BRIDGE</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 18, color: COLORS.text, letterSpacing: 2 }}>BRIDGE</span>
+            <span style={{ fontSize: 10, color: COLORS.border, fontFamily: "monospace", letterSpacing: 0.5 }}>
+              bridge.ai › {chatLog.length > 0
+                ? (chatLog.find(m=>m.type==="user")?.content?.slice(0,20) || (isJa?"新しい会話":"New Chat")) + (chatLog.find(m=>m.type==="user")?.content?.length > 20 ? "..." : "")
+                : (isJa?"新しい会話":"New Chat")}
+            </span>
+          </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             {!hasKeys && (
               <button onClick={()=>setApiModalOpen(true)} style={{ background: "#6B728015", border: "1px solid #6B728040", borderRadius: 8, padding: "5px 12px", color: COLORS.muted, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
