@@ -621,10 +621,15 @@ export default function App() {
     try {
       return await callAI(aiId, messages, apiKeys, useSearch);
     } catch(e) {
+      const aiName = AI_CONFIG.find(a=>a.id===aiId)?.name || aiId;
       if (e.message === "CREDIT_EMPTY") {
-        setError(isJa ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のクレジットが不足しています。` : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} credit is empty.`);
+        setError(isJa ? `⚠️ ${aiName}のクレジットが不足しています。` : `⚠️ ${aiName} credit is empty.`);
       } else if (e.message === "INVALID_KEY") {
-        setError(isJa ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のAPIキーが無効です。` : `⚠️ Invalid API key for ${AI_CONFIG.find(a=>a.id===aiId)?.name}.`);
+        setError(isJa ? `⚠️ ${aiName}のAPIキーが無効です。` : `⚠️ Invalid API key for ${aiName}.`);
+      } else if (e.message !== "NO_KEY") {
+        // その他のエラーを表示（GeminiのAPIエラーなど）
+        setError(`⚠️ ${aiName}: ${e.message}`);
+        console.error(`${aiName} error:`, e.message);
       }
       return fallbackContent;
     }
@@ -705,7 +710,8 @@ export default function App() {
 
   const runDebate = async (context) => {
     setPhase("debating");
-    const userQuestion = context.filter(m=>m.role==="user").map(m=>m.content).join(" / ");
+    const userQuestion = context.filter(m=>m.role==="user").map(m=>m.content).join("。") || "";
+    const mainQuestion = context.filter(m=>m.role==="user")[0]?.content || userQuestion;
 
     const debateAIs = activeAIs.length > 0 ? activeAIs : [AI_CONFIG.find(a=>a.id==="claude")];
     const allResponses = [];
@@ -726,10 +732,10 @@ export default function App() {
 
       const prompt = debateAIs.length === 1
         ? (isJa
-          ? `質問：「${userQuestion}」
+          ? `質問：「${mainQuestion}」
 
 あなたはあらゆる分野の知識を持つAIです。知っている情報は積極的に答えてください。必要であればWeb検索を使って最新情報も加えてください。話し言葉で自然に、具体的に200字以内で答えてください。`
-          : `Question: "${userQuestion}"
+          : `Question: "${mainQuestion}"
 
 You are a knowledgeable AI assistant. Share what you know and use web search for the latest info if needed. Answer naturally and specifically in under 150 words.`)
         : (isJa
