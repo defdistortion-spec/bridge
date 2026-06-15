@@ -587,6 +587,7 @@ export default function App() {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [debateOrder, setDebateOrder] = useState(ls("bridge_debate_order", ["gpt","claude","gemini"]));
   const bottomRef = useRef(null);
+  const topRef = useRef(null);
 
   // パネル外クリックで閉じる
   useEffect(() => {
