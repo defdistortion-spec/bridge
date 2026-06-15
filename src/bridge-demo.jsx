@@ -453,7 +453,7 @@ function ApiKeyModal({ open, onClose, onSave, keys, setKeys, selectedAIs, lang }
           <span>🔒</span><span style={{ fontSize: 12, color: "#10B981" }}>{isJa?"APIキーはBRIDGEのサーバーに送信されません。":"API keys are never sent to BRIDGE servers."}</span>
         </div>
         <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {AI_CONFIG.filter(ai=>selectedAIs.includes(ai.id)).map(ai=>(
+          {AI_CONFIG.map(ai=>(
             <div key={ai.id}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 7, height: 7, borderRadius: "50%", background: ai.color }} /><span style={{ fontSize: 13, fontWeight: 600, color: ai.color, fontFamily: "monospace" }}>{ai.name}</span></div>
@@ -533,7 +533,7 @@ function MyPage({ open, onClose, lang, setLang, apiKeys, selectedAIs, setSelecte
 
           <div style={{ padding: "14px 22px" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, marginBottom: 10 }}>{isJa?"APIキー":"API Keys"}</div>
-            {AI_CONFIG.filter(ai=>selectedAIs.includes(ai.id)).map(ai=>(
+            {AI_CONFIG.map(ai=>(
               <div key={ai.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: COLORS.bg, borderRadius: 8, border: `1px solid ${apiKeys[ai.id]?ai.border:COLORS.border}`, marginBottom: 8 }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: apiKeys[ai.id]?ai.color:COLORS.border }} />
                 <span style={{ fontSize: 13, color: apiKeys[ai.id]?ai.color:COLORS.muted, fontFamily: "monospace", fontWeight: 600 }}>{ai.name}</span>
@@ -830,7 +830,18 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
         ::-webkit-scrollbar-thumb { background: #21262D; border-radius: 3px; }
       `}</style>
 
-      <ApiKeyModal open={apiModalOpen} onClose={()=>setApiModalOpen(false)} onSave={k=>{setApiKeys(k);lsSet(STORAGE_KEYS.apiKeys,k);}} keys={apiKeys} setKeys={setApiKeys} selectedAIs={selectedAIs} lang={lang} />
+      <ApiKeyModal open={apiModalOpen} onClose={()=>setApiModalOpen(false)} onSave={k=>{
+              setApiKeys(k);
+              lsSet(STORAGE_KEYS.apiKeys,k);
+              // キーが入ってるAIを自動でselectedAIsに追加
+              const newSelected = AI_CONFIG
+                .filter(ai => ai.id === "claude" || k[ai.id]?.trim().length > 0)
+                .map(ai => ai.id);
+              if (newSelected.length > 0) {
+                setSelectedAIs(newSelected);
+                lsSet(STORAGE_KEYS.selectedAIs, newSelected);
+              }
+            }} keys={apiKeys} setKeys={setApiKeys} selectedAIs={selectedAIs} lang={lang} />
       <MyPage open={myPageOpen} onClose={()=>setMyPageOpen(false)} lang={lang} setLang={setLang} apiKeys={apiKeys} selectedAIs={selectedAIs} setSelectedAIs={setSelectedAIs} history={history} starred={starred} onOpenApiSettings={()=>setApiModalOpen(true)} />
       <Sidebar open={sidebarOpen} onClose={()=>setSidebarOpen(false)} lang={lang} history={history} starred={starred} onToggleStar={toggleStar} onSelectHistory={()=>setSidebarOpen(false)} onOpenMyPage={()=>setMyPageOpen(true)} onOpenApiSettings={()=>setApiModalOpen(true)} />
 
