@@ -615,12 +615,11 @@ export default function App() {
     addUserMessage(text);
     setTypingId(null);
 
-    if (phase === "listening") {
+    if (phase === "listening" || phase === "done") {
+      // doneの場合はリセットせずそのまま会話を続ける
+      setPhase("listening");
+      setNextQuestions([]);
       await handleListening(text);
-    } else if (phase === "done") {
-      // 新しい質問として再開
-      resetChat();
-      setTimeout(() => handleListening(text), 100);
     }
   };
 
@@ -823,7 +822,12 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
 
           {phase === "done" && (
             <>
-              <NextQuestions questions={nextQuestions} onSelect={q=>{setInput(q);}} loading={nextQLoading} lang={lang} />
+              <NextQuestions questions={nextQuestions} onSelect={async (q) => {
+                setNextQuestions([]);
+                addUserMessage(q);
+                setPhase("listening");
+                await handleListening(q);
+              }} loading={nextQLoading} lang={lang} />
             </>
           )}
 
