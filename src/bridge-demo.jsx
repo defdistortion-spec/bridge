@@ -847,7 +847,13 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 18, color: COLORS.text, letterSpacing: 2 }}>BRIDGE</span>
-            <span style={{ fontSize: 10, color: COLORS.border, fontFamily: "monospace", letterSpacing: 0.5 }}>
+            <span
+              onClick={() => topRef.current?.scrollIntoView({ behavior: "smooth" })}
+              style={{ fontSize: 10, color: COLORS.border, fontFamily: "monospace", letterSpacing: 0.5, cursor: chatLog.length > 0 ? "pointer" : "default", transition: "color 0.2s" }}
+              onMouseEnter={e => { if (chatLog.length > 0) e.currentTarget.style.color = COLORS.muted; }}
+              onMouseLeave={e => { e.currentTarget.style.color = COLORS.border; }}
+              title={chatLog.length > 0 ? (isJa ? "会話の先頭に戻る" : "Back to top") : ""}
+            >
               bridge.ai › {chatLog.length > 0
                 ? (chatLog.find(m=>m.type==="user")?.content?.slice(0,20) || (isJa?"新しい会話":"New Chat")) + (chatLog.find(m=>m.type==="user")?.content?.length > 20 ? "..." : "")
                 : (isJa?"新しい会話":"New Chat")}
@@ -870,6 +876,7 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
 
         {/* チャットエリア */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 8px", maxWidth: 680, width: "100%", margin: "0 auto" }}>
+          <div ref={topRef} />
           {chatLog.map((msg, i) => (
             msg.type === "user"
               ? <UserBubble key={msg.id} content={msg.content} />
