@@ -41,11 +41,25 @@ function getGreeting(lang) {
 }
 
 // ===== API =====
-async function callGPT(messages, apiKey) {
+async function callGPT(messages, apiKey, useSearch = false) {
+  const body = {
+    model: "gpt-4o-mini",
+    max_tokens: 600,
+    messages,
+  };
+  if (useSearch) {
+    // GPTのWeb検索ツール
+    body.tools = [{ type: "function", function: {
+      name: "web_search",
+      description: "Search the web for current information",
+      parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }
+    }}];
+    body.tool_choice = "auto";
+  }
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: 600, messages }),
+    body: JSON.stringify(body),
   });
   const d = await r.json();
   if (d.error) {
@@ -57,20 +71,56 @@ async function callGPT(messages, apiKey) {
   return d.choices?.[0]?.message?.content || "";
 }
 
-async function callClaude(messages) {
+// Gemini API（AQ.形式対応・Web検索付き）
+async function callGemini(messages, apiKey, useSearch = false) {
+  const lastMessage = messages[messages.length - 1]?.content || "";
+  const body = {
+    contents: [{ parts: [{ text: lastMessage }] }],
+    generationConfig: { maxOutputTokens: 600 },
+  };
+  if (useSearch) {
+    body.tools = [{ google_search: {} }];
+  }
+  // AQ.形式のキーはBearer認証を使う
+  const headers = { "Content-Type": "application/json" };
+  const isAQKey = apiKey.startsWith("AQ.");
+  if (isAQKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+  const endpoint = isAQKey
+    ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const r = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message || "Gemini API Error");
+  return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+async function callClaude(messages, useSearch = false) {
+  const body = {
+    model: "claude-sonnet-4-6",
+    max_tokens: 600,
+    messages,
+  };
+  if (useSearch) {
+    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+  }
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, messages }),
+    body: JSON.stringify(body),
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message);
-  return d.content?.[0]?.text || "";
+  // テキストコンテンツを全て結合（web_search結果含む）
+  const texts = (d.content || []).filter(b => b.type === "text").map(b => b.text);
+  return texts.join("") || "";
 }
 
-async function callAI(aiId, messages, apiKeys) {
-  if (aiId === "claude") return await callClaude(messages);
-  if (aiId === "gpt" && apiKeys.gpt?.trim()) return await callGPT(messages, apiKeys.gpt.trim());
+async function callAI(aiId, messages, apiKeys, useSearch = false) {
+  if (aiId === "claude") return await callClaude(messages, useSearch);
+  if (aiId === "gpt" && apiKeys.gpt?.trim()) return await callGPT(messages, apiKeys.gpt.trim(), useSearch);
+  if (aiId === "gemini" && apiKeys.gemini?.trim()) return await callGemini(messages, apiKeys.gemini.trim(), useSearch);
   throw new Error("NO_KEY");
 }
 
@@ -569,9 +619,9 @@ export default function App() {
   };
 
   // AIを呼び出す（エラーハンドリング付き）
-  const invokeAI = async (aiId, messages, fallbackContent) => {
+  const invokeAI = async (aiId, messages, fallbackContent, useSearch = false) => {
     try {
-      return await callAI(aiId, messages, apiKeys);
+      return await callAI(aiId, messages, apiKeys, useSearch);
     } catch(e) {
       if (e.message === "CREDIT_EMPTY") {
         setError(isJa ? `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name}のクレジットが不足しています。` : `⚠️ ${AI_CONFIG.find(a=>a.id===aiId)?.name} credit is empty.`);
@@ -680,10 +730,10 @@ export default function App() {
         ? (isJa
           ? `質問：「${userQuestion}」
 
-話し言葉で自然に、具体的に答えてください。200字以内で。`
+あなたはあらゆる分野の知識を持つAIです。知っている情報は積極的に答えてください。必要であればWeb検索を使って最新情報も加えてください。話し言葉で自然に、具体的に200字以内で答えてください。`
           : `Question: "${userQuestion}"
 
-Answer naturally and specifically in under 150 words.`)
+You are a knowledgeable AI assistant. Share what you know and use web search for the latest info if needed. Answer naturally and specifically in under 150 words.`)
         : (isJa
           ? `質問：「${userQuestion}」
 
@@ -700,7 +750,7 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
         ? `「${userQuestion}」についてですね。まず基本的な情報から整理してみましょう。`
         : `Regarding "${userQuestion}", let me start with the key points.`;
 
-      const response = await invokeAI(ai.id, [{ role: "user", content: prompt }], fallback);
+      const response = await invokeAI(ai.id, [{ role: "user", content: prompt }], fallback, true);
 
       setThinkingAI(null);
       allResponses.push({ name: ai.name, content: response });
@@ -718,7 +768,8 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
 
       const unified = await invokeAI("claude",
         [{ role: "user", content: unifiedPrompt }],
-        isJa?"みなさんの意見を総合すると、まず一歩踏み出すことが大切です。":"To summarize: the most important thing is to take the first step."
+        isJa?"みなさんの意見を総合すると、まず一歩踏み出すことが大切です。":"To summarize: the most important thing is to take the first step.",
+        false
       );
 
       setThinkingAI(null);
