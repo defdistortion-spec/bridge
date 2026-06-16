@@ -573,6 +573,7 @@ export default function App() {
   const [starred, setStarred] = useState(ls(STORAGE_KEYS.starred, []));
 
   const [error, setError] = useState("");
+  const isComposing = useRef(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [debateOrder, setDebateOrder] = useState(ls("bridge_debate_order", ["gpt","claude","gemini"]));
   const bottomRef = useRef(null);
@@ -918,7 +919,9 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
                 ref={inputRef}
                 value={input}
                 onChange={e=>setInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} }}
+                onCompositionStart={() => { isComposing.current = true; }}
+                onCompositionEnd={() => { isComposing.current = false; }}
+                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey&&!isComposing.current){e.preventDefault();handleSend();} }}
                 placeholder={phase==="debating"
                   ? (isJa?"AIたちが考えています...":"AIs are thinking...")
                   : (isJa?"メッセージを入力... (Enterで送信)":"Type a message... (Enter to send)")
