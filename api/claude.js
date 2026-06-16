@@ -1,5 +1,5 @@
-// Vercel Function - Claude APIのプロキシ（ユーザーのAPIキーを使用）
-export default async function handler(req, res) {
+// Vercel Function - Claude APIのプロキシ
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -8,20 +8,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { messages, useSearch, apiKey } = req.body;
-
-  // APIキーの優先順位：リクエストのキー → 環境変数
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) return res.status(400).json({ error: 'API key required' });
 
   try {
-    const body = {
-      model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      messages,
-    };
-    if (useSearch) {
-      body.tools = [{ type: "web_search_20250305", name: "web_search" }];
-    }
+    const body = { model: "claude-sonnet-4-6", max_tokens: 600, messages };
+    if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
