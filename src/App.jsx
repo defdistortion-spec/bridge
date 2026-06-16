@@ -600,9 +600,14 @@ export default function App() {
   const isJa = lang === "ja";
 
   // 選択済み＆APIキー設定済みのAI
+  // Vercel環境ではClaudeもキーが必要
+  const isVercelEnv = typeof window !== "undefined" && 
+    !window.location.hostname.includes("claude.ai") && 
+    window.location.hostname !== "localhost";
+  
   const activeAIs = AI_CONFIG.filter(ai => {
     if (!selectedAIs.includes(ai.id)) return false;
-    if (ai.id === "claude") return true; // Claude はキー不要
+    if (ai.id === "claude" && !isVercelEnv) return true; // Artifactのみキー不要
     return apiKeys[ai.id]?.trim().length > 0;
   });
 

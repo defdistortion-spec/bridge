@@ -7,11 +7,12 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { messages, apiKey, useSearch } = req.body;
+  const { messages, apiKey, useSearch } = req.body || {};
+
   if (!apiKey) return res.status(400).json({ error: 'API key required' });
 
   try {
-    const lastMessage = messages[messages.length - 1]?.content || "";
+    const lastMessage = messages?.[messages.length - 1]?.content || "";
     const body = {
       contents: [{ parts: [{ text: lastMessage }] }],
       generationConfig: { maxOutputTokens: 600 },
@@ -31,12 +32,17 @@ module.exports = async function handler(req, res) {
     );
 
     const data = await response.json();
-    if (data.error) return res.status(400).json({ error: data.error.message });
+    
+    if (data.error) {
+      console.error('Gemini API error:', data.error);
+      return res.status(400).json({ error: data.error.message || JSON.stringify(data.error) });
+    }
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return res.status(200).json({ text });
 
   } catch (error) {
+    console.error('Gemini fetch error:', error);
     return res.status(500).json({ error: error.message });
   }
 }
