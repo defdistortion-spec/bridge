@@ -285,7 +285,7 @@ function SetupWizard({ onComplete }) {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 14, color: sel ? ai.color : COLORS.muted }}>{ai.name}</div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>{ai.id==="gpt"?(isJa?"話を聞いて広げる":"Listens and expands"):ai.id==="claude"?(isJa?"深く掘り下げる":"Digs deeper"):(isJa?"まとめて答えを出す":"Synthesizes & concludes")}</div>
+                      <div style={{ fontSize: 11, color: COLORS.muted }}>{isJa ? "APIキーが必要です" : "API key required"}</div>
                     </div>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: ai.color, opacity: sel?1:0.2 }} />
                   </div>

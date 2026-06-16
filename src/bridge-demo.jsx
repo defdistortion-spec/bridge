@@ -71,26 +71,18 @@ async function callGPT(messages, apiKey, useSearch = false) {
   return d.choices?.[0]?.message?.content || "";
 }
 
-// Gemini API（AQ.形式・x-goog-api-keyヘッダー対応）
+// Gemini API（Vercel Function経由でCORSを回避）
 async function callGemini(messages, apiKey, useSearch = false) {
-  const lastMessage = messages[messages.length - 1]?.content || "";
-  const body = {
-    contents: [{ parts: [{ text: lastMessage }] }],
-    generationConfig: { maxOutputTokens: 600 },
-  };
-  if (useSearch) {
-    body.tools = [{ google_search: {} }];
-  }
-  // AQ.形式もAIzaSy形式も x-goog-api-key ヘッダーで統一
-  const headers = {
-    "Content-Type": "application/json",
-    "x-goog-api-key": apiKey,
-  };
-  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-  const r = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
+  // 開発環境とVercel両対応
+  const endpoint = "/api/gemini";
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, apiKey, useSearch }),
+  });
   const d = await r.json();
-  if (d.error) throw new Error(d.error.message || "Gemini API Error");
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (d.error) throw new Error(d.error);
+  return d.text || "";
 }
 
 async function callClaude(messages, useSearch = false) {
@@ -293,7 +285,7 @@ function SetupWizard({ onComplete }) {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 14, color: sel ? ai.color : COLORS.muted }}>{ai.name}</div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>{ai.id==="gpt"?(isJa?"話を聞いて広げる":"Listens and expands"):ai.id==="claude"?(isJa?"深く掘り下げる":"Digs deeper"):(isJa?"まとめて答えを出す":"Synthesizes & concludes")}</div>
+                      <div style={{ fontSize: 11, color: COLORS.muted }}>{isJa ? "APIキーが必要です" : "API key required"}</div>
                     </div>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: ai.color, opacity: sel?1:0.2 }} />
                   </div>
