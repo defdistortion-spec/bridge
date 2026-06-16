@@ -73,15 +73,17 @@ async function callGPT(messages, apiKey, useSearch = false) {
 
 // Gemini API（Vercel Function経由でCORSを回避）
 async function callGemini(messages, apiKey, useSearch = false) {
-  // 開発環境とVercel両対応
-  const endpoint = "/api/gemini";
-  const r = await fetch(endpoint, {
+  const r = await fetch("/api/gemini", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, apiKey, useSearch }),
   });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(`Gemini HTTP ${r.status}: ${errText.slice(0, 100)}`);
+  }
   const d = await r.json();
-  if (d.error) throw new Error(d.error);
+  if (d.error) throw new Error(`Gemini API: ${d.error}`);
   return d.text || "";
 }
 
@@ -927,6 +929,8 @@ Respond naturally in under 120 words.${isLast?" Synthesize into best answer.":""
                 ref={inputRef}
                 value={input}
                 onChange={e=>setInput(e.target.value)}
+                onCompositionStart={() => { isComposing.current = true; }}
+                onCompositionEnd={() => { isComposing.current = false; }}
                 onCompositionStart={() => { isComposing.current = true; }}
                 onCompositionEnd={() => { isComposing.current = false; }}
                 onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey&&!isComposing.current){e.preventDefault();handleSend();} }}
