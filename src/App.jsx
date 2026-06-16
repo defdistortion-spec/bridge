@@ -85,29 +85,37 @@ async function callGemini(messages, apiKey, useSearch = false) {
   return d.text || "";
 }
 
-async function callClaude(messages, useSearch = false) {
-  const body = {
-    model: "claude-sonnet-4-6",
-    max_tokens: 600,
-    messages,
-  };
-  if (useSearch) {
-    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+async function callClaude(messages, useSearch = false, apiKey = "") {
+  // Vercel環境ではサーバーサイドプロキシ経由、それ以外は直接呼び出し
+  const isVercel = window.location.hostname !== "localhost" && !window.location.hostname.includes("claude.ai");
+  
+  if (isVercel) {
+    const r = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, useSearch, apiKey }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    return d.text || "";
+  } else {
+    // Artifact（Claude.ai）では直接呼び出し
+    const body = { model: "claude-sonnet-4-6", max_tokens: 600, messages };
+    if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    const texts = (d.content || []).filter(b => b.type === "text").map(b => b.text);
+    return texts.join("") || "";
   }
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
-  // テキストコンテンツを全て結合（web_search結果含む）
-  const texts = (d.content || []).filter(b => b.type === "text").map(b => b.text);
-  return texts.join("") || "";
 }
 
 async function callAI(aiId, messages, apiKeys, useSearch = false) {
-  if (aiId === "claude") return await callClaude(messages, useSearch);
+  if (aiId === "claude") return await callClaude(messages, useSearch, apiKeys.claude || "");
   if (aiId === "gpt" && apiKeys.gpt?.trim()) return await callGPT(messages, apiKeys.gpt.trim(), useSearch);
   if (aiId === "gemini" && apiKeys.gemini?.trim()) return await callGemini(messages, apiKeys.gemini.trim(), useSearch);
   throw new Error("NO_KEY");
